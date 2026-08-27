@@ -1,0 +1,64 @@
+# LAMMPS input
+variable TEMP           equal   310.0
+variable PRESS          equal   0.0
+variable RUNTIME        equal   80000         # (10x1e6 timesteps)
+variable RESTART        equal   10000             # frequency of writing restart file
+variable dumptrj        equal   500
+#variable SEED                  equal   12392
+variable SEED2          equal   $( v_SEED + 1099 )
+variable SEED3          equal   $( v_SEED + 80192 )
+variable SEED4          equal   $( v_SEED + 7102 )
+variable SEED5          equal   $( v_SEED + 30192 )
+include                 "system.init"
+#########               READ DATA FILE ######################
+read_data               Capsid.data
+# Read aligned coordinates from lammpstrj file (unwrapped coordinates)
+read_dump               first_frame_aligned_y.lammpstrj 0 x y z box yes replace yes format native
+include                 "Capsid_intra.ff"
+include                 "Capsid_assembly.ff"
+timestep                50.0                    #timestep of 50 fs
+group                   Capsid type 1 92
+neigh_modify            exclude molecule/intra Capsid
+comm_style              tiled
+comm_modify             mode single cutoff 70.0
+compute                 1 Capsid pair gauss/wall
+thermo                  10000
+thermo_style            multi
+thermo_modify           flush yes
+fix                     m1 Capsid momentum 100000 linear 1 1 1 angular
+fix                     b1 Capsid balance 100000 1.2 rcb
+
+velocity                all create 310 ${SEED} mom yes rot yes dist gaussian
+reset_timestep          0
+
+##### Virtual cone expansion along Y-axis
+group                   core type 1 92
+compute                 coreCOM core com
+variable                cx equal c_coreCOM[1]
+variable                cy equal c_coreCOM[2]
+variable                cz equal c_coreCOM[3]
+# Cone parameters - maintaining complete shape (radii AND height scale together)
+variable                scale equal 1.0+0.0001*step      # global scale factor
+variable                radlo equal 15.0*v_scale        # radius at low end
+variable                radhi equal 45.0*v_scale        # radius at high end (3x radlo)
+variable                half_height equal 75.0*v_scale  # half of total height (scales)
+variable                ylo equal c_coreCOM[2]-v_half_height   # cone extends below COM in Y
+variable                yhi equal c_coreCOM[2]+v_half_height   # cone extends above COM in Y
+#####
+velocity                all create 310 ${SEED} mom yes rot yes dist gaussian
+reset_timestep          0
+fix                     3 all nve
+fix                     4 all langevin ${TEMP} ${TEMP} 500000.0 ${SEED3} zero yes
+##### Initialize compute
+compute_modify          coreCOM dynamic/dof yes
+thermo_style            custom step temp c_coreCOM[1] c_coreCOM[2] c_coreCOM[3] v_radlo v_radhi v_scale
+run                     0
+thermo_style            multi
+##### Cone along Y-axis with side out to push particles outward
+fix                     push all indent 1.0 cone y v_cx v_cz v_radlo v_radhi v_ylo v_yhi side out
+#####
+dump                    1 all custom ${dumptrj} Capsid.lammpstrj id mol type xs ys zs
+dump_modify             1 sort id
+restart                 ${RESTART} config.1 config.2
+run                     ${RUNTIME}
+write_data              eq0.data nocoeff

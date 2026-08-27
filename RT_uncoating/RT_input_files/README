@@ -1,0 +1,91 @@
+Follow the paper carefully for this.
+
+The simulations consist of three sequential stages:
+
+Stage I: RNA-DNA hybrid formation – CG-KMC is used to add dNTPs to the RNA, gradually forming an RNA-DNA hybrid.
+Stage II: RNA-DNA hybrid cleavage – RNA-DNA bonds are stochastically broken to generate the complementary ssDNA (cDNA).
+Stage III: dsDNA formation and capsid rupture – dNTPs are added to the cDNA to form dsDNA, whose increasing rigidity ultimately drives capsid rupture. The experimentally motivated ~3.5 kb switch used to initiate uncoating is described in detail in the paper.
+
+Each CG-KMC iteration consists of a short LAMMPS MD run characterized by a single bond formation or breaking event (the MC step). After each KMC move, the LAMMPS topology is updated to account for changes in atom types, bonds, and angles. Because RNA/DNA bonds can form and break during the simulation, the total number of atoms of each type and the total number of bonds can change between iterations.
+
+(Different approaches to velocity initialization were tested, including generating an initial velocity distribution and restarting subsequent iterations from the previous trajectory, as well as generating new initial velocities at every iteration. No significant differences were observed between these approaches.)
+
+The detailed CG-KMC protocol, including the experimentally motivated ~3.5 kb switch and the procedures for the three stages, is described in the paper and SI.
+
+For reproducibility, use a fixed input seed for all stages (eg. 542, different input seeds will lead to different rupture patterns).
+
+
+Atom types:
+types 1 to 92: capsid
+93: RNA
+94: dNTP
+95: RNA (after binding)
+96: dNTP (after binding)
+97: RNA (to bind)
+98: dNTP (cDNA) (to bind)
+99: dNTP (cDNA) (after binding)
+100: dNTP (new) (after binding)
+
+.
+├── Main_runs
+│   ├── stage_I
+│   │   ├── cap_rnp_dntp_ang.data
+│   │   ├── Capsid_assembly.ff
+│   │   ├── Capsid_intra.ff
+│   │   ├── extract_frames
+│   │   ├── inCapsid
+│   │   ├── inCapsid_init
+│   │   ├── kmc.sh
+│   │   ├── RNP.ff
+│   │   ├── start.data
+│   │   └── system.init
+│   ├── stage_II
+│   │   ├── Capsid_assembly.ff
+│   │   ├── Capsid_intra.ff
+│   │   ├── inCapsid
+│   │   ├── kmc_stage_II.sh
+│   │   ├── RNP.ff
+│   │   ├── start.data
+│   │   └── system.init
+│   └── stage_III
+│       ├── eps_2.0
+│       ├── eps_3.5
+│       ├── eps_5.0
+│       └── start_cdna.data
+├── PPT_included
+│   ├── Capsid_assembly.ff
+│   ├── Capsid_intra.ff
+│   ├── cdna_ids.dat
+│   ├── inCapsid_high
+│   ├── inCapsid_init
+│   ├── inCapsid_low
+│   ├── kmc_dna_flap.sh
+│   ├── RNP_high.ff
+│   ├── RNP_low.ff
+│   ├── start_cdna.data
+│   ├── start.data
+│   └── system.init
+├── README
+└── virtual_object_expansion
+    ├── cone
+    │   ├── Capsid_assembly.ff
+    │   ├── Capsid.data
+    │   ├── Capsid_intra.ff
+    │   ├── Capsid_RNP.data
+    │   ├── eq0.data
+    │   ├── inCapsid
+    │   ├── inCapsid_orig
+    │   ├── run.sh
+    │   └── system.init
+    └── double_sphere
+        ├── Capsid_assembly.ff
+        ├── Capsid.data
+        ├── Capsid_intra.ff
+        ├── Capsid_RNP.data
+        ├── eq0.data
+        ├── inCapsid
+        ├── inCapsid_orig
+        ├── run.sh
+        └── system.init
+
+12 directories, 48 files
