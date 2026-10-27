@@ -4,7 +4,7 @@ This repository contains all codes and input files required to simulate HIV-1 ca
 
 We use an integrative coarse-grained (CG) approach to dynamically simulate reverse transcription, which converts flexible ssRNA into rigid dsDNA, inside the HIV-1 capsid. Beyond a critical threshold, dsDNA growth generates sufficient mechanical stress to drive capsid rupture, leading to uncoating.
 
-Corresponding paper: [Proc. Natl. Acad. Sci. U.S.A. 123 (43) e2617714123 (2026)](https://doi.org/10.1073/pnas.2617714123)
+Corresponding paper: [*Proc. Natl. Acad. Sci. U.S.A.* 123 (43) e2617714123 (2026)](https://doi.org/10.1073/pnas.2617714123)  
 Datasets and models: [Zenodo](https://doi.org/10.5281/zenodo.22169970)
 
 Model and simulation details:
