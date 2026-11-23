@@ -1,13 +1,213 @@
 # HIV-CG-RT
-
-This repository contains all codes and input files required to simulate HIV-1 capsid uncoating driven by reverse transcription.
-
-We use an integrative coarse-grained (CG) approach to dynamically simulate reverse transcription, which converts flexible ssRNA into rigid dsDNA, inside the HIV-1 capsid. Beyond a critical threshold, dsDNA growth generates sufficient mechanical stress to drive capsid rupture, leading to uncoating.
+This repository contains the codes and input files needed to simulate HIV-1 capsid uncoating driven by reverse transcription.
 
 Corresponding paper: [*Proc. Natl. Acad. Sci. U.S.A.* 123 (43) e2617714123 (2026)](https://doi.org/10.1073/pnas.2617714123)  
 Datasets and models: [Zenodo](https://doi.org/10.5281/zenodo.22169970)
 
+## Overview
+
+We use an integrative coarse-grained (CG) approach to dynamically simulate reverse transcription inside the HIV-1 capsid. Reverse transcription converts flexible ssRNA into rigid dsDNA. Beyond a critical threshold, dsDNA growth generates enough mechanical stress to rupture the capsid, which leads to uncoating.
+
+Reverse transcription is modeled with a Coarse-Grained Kinetic Monte Carlo (CG-KMC) algorithm coupled to CG molecular dynamics (MD). Each CG-KMC iteration is a short LAMMPS MD run in which a single bond-forming or bond-breaking event occurs (the MC step). After each move, the LAMMPS topology is updated to account for the changes in atom types, bonds and angles. Because RNA/DNA bonds form and break during the simulation, the number of atoms of each type and the number of bonds change between iterations.
+
 Model and simulation details:
 - Capsid model: [Hudait and Voth, PNAS, 121 (4) e2313737121, 2024](https://www.pnas.org/doi/10.1073/pnas.2313737121)
-- MD engine: [LAMMPS](https://www.lammps.org/#gsc.tab=0)
-- Coarse-Grained Kinetic Monte Carlo (CG-KMC) algorithm: inputs and codes provided
+- MD engine: [LAMMPS](https://www.lammps.org/#gsc.tab=0), with a custom pair style (`gauss/wall`) for the capsid
+- CG-KMC algorithm: Bash driver scripts that wrap LAMMPS runs and edit the LAMMPS data file between iterations
+
+## Workflow
+
+The simulations consist of three sequential stages:
+
+1) **Stage I: RNA–DNA hybrid formation.** CG-KMC adds dNTPs to the RNA one bead at a time, gradually forming an RNA–DNA hybrid.
+
+2) **Stage II: RNA–DNA hybrid cleavage.** RNA–DNA bonds are stochastically broken to generate the complementary ssDNA (cDNA).
+
+3) **Stage III: dsDNA formation and capsid rupture.** dNTPs are added to the cDNA to form dsDNA, whose increasing rigidity eventually ruptures the capsid. The experimentally motivated ~3.5 kb switch used to initiate uncoating is described in detail in the paper. Stage III is run with three capsid–dsDNA interaction strengths (ε = 2.0, 3.5 and 5.0 kcal/mol).
+
+Additional simulations:
+- **PPT included:** Stage III with dsDNA synthesis starting at two sites, mimicking the polypurine tract (PPT) and the resulting DNA flap.
+- **Virtual object expansion:** control simulations in which a virtual object (a cone or two spheres) expands inside the capsid, applying stress to the capsid from inside.
+
+The detailed CG-KMC protocol for all three stages is described in the paper and its SI.
+
+### 1. Stage I: RNA–DNA hybrid
+
+`kmc.sh` loops over the 3000 CG RNA beads. In each iteration:
+- The current RNA bead is relabeled (type 93 → 97) so that a free dNTP (type 94) can bind to it.
+- LAMMPS (`inCapsid`) runs a short MD simulation with `fix bond/create`. This forms the RNA–dNTP bond (type 521) and relabels the pair (97 → 95, 94 → 96).
+- If no bond has formed, the MD run is repeated until binding occurs.
+- The data file is updated: a dNTP–dNTP backbone bond (type 522) and a dNTP–dNTP–dNTP angle (type 4) are added, and the corresponding RNA bonds and angles are stiffened (bond 520 → 523, angle 1 → 2).
+
+`inCapsid_init` is run once at the start to initialize velocities and write the starting data file.
+
+### 2. Stage II: hybrid cleavage
+
+`kmc_stage_II.sh` loops over the RNA–dNTP bonds. Each bond is relabeled (521 → 524) and broken with `fix bond/break` during a short MD run. The run is repeated until the bond is broken.
+
+### 3. Stage III: dsDNA formation and capsid rupture
+
+`kmc_stage_III.sh` loops over the cDNA beads in the order listed in `cdna_ids.dat`. In each iteration:
+- The cDNA bead is relabeled (96 → 98) and binds a free dNTP via `fix bond/create` (bond type 525; 98 → 99, 94 → 100).
+- The new strand's backbone bond (type 526) and angle (type 6) are added, and the cDNA backbone is stiffened (bond 522 → 527, angle 4 → 7).
+- The simulation uses `inCapsid_low` (`RNP_low.ff`) up to the switch and `inCapsid_high` (`RNP_high.ff`) afterwards. `RNP_high.ff` contains the capsid–dsDNA attraction, whose strength is set by ε.
+
+`cdna_ids.dat` (the atom IDs of the cDNA beads) is generated from the final Stage I data file with `stage_I/extract_frames/cdna_ids.sh`.
+
+### 4. PPT included
+
+`kmc_dna_flap.sh` follows Stage III but grows dsDNA from two starting points along the cDNA. At each iteration, one of the two growth fronts is chosen at random.
+
+### 5. Virtual object expansion
+
+`inCapsid` in `cone/` and `double_sphere/` expands a virtual cone (along the capsid's long axis) or two spheres inside the capsid using `fix indent`. Their size grows linearly with time.
+
+## Repository structure
+
+```
+HIV-CG-RT/
+├── LAMMPS_custom_fixes/              # custom LAMMPS pair style (gauss/wall)
+└── RT_uncoating/
+    ├── RT_input_files/
+    │   ├── Main_runs/
+    │   │   ├── stage_I/              # RNA–DNA hybrid formation
+    │   │   │   └── extract_frames/   # generates cdna_ids.dat from the final Stage I data file
+    │   │   ├── stage_II/             # RNA–DNA hybrid cleavage
+    │   │   └── stage_III/            # dsDNA formation and capsid rupture
+    │   │       ├── eps_2.0/
+    │   │       ├── eps_3.5/
+    │   │       └── eps_5.0/
+    │   ├── PPT_included/             # dsDNA synthesis from two sites (PPT / DNA flap)
+    │   └── virtual_object_expansion/
+    │       ├── cone/
+    │       └── double_sphere/
+    ├── cryo_rupture_predictions/     # snapshots that match the cryo-ET images in the paper
+    └── selected_configurations/      # selected configurations of capsid rupture (with DNA)
+```
+
+### Key files
+
+| File | Description |
+|---|---|
+| `pair_gauss_wall.cpp`, `pair_gauss_wall.h` | Custom LAMMPS pair style `gauss/wall` used for capsid interactions |
+| `kmc.sh`, `kmc_stage_II.sh`, `kmc_stage_III.sh`, `kmc_dna_flap.sh` | CG-KMC driver scripts (SLURM submission scripts) |
+| `inCapsid_init` | LAMMPS input to initialize a stage (velocities and starting data file) |
+| `inCapsid`, `inCapsid_low`, `inCapsid_high` | LAMMPS inputs for the short MD run in each CG-KMC iteration |
+| `system.init` | LAMMPS settings (units, styles, neighbor lists) |
+| `Capsid_intra.ff`, `Capsid_assembly.ff` | Capsid force field (intra-protein and assembly interactions) |
+| `RNP.ff`, `RNP_low.ff`, `RNP_high.ff` | RNA/DNA/dNTP force field and RNA/DNA–capsid interactions |
+| `*.data` | LAMMPS data files (`cap_rnp_dntp_ang.data`: Stage I starting structure; `start_cdna.data`: Stage III starting structure) |
+| `cdna_ids.sh`, `cdna_ids.dat` | Script that lists the cDNA bead IDs, and its output |
+| `CN.py` | Coordination numbers of capsid trimer- and dimer-interface sites along a trajectory |
+| `run.sh` | SLURM submission script for the virtual object expansion runs |
+| `*.lammpstrj` | LAMMPS trajectory snapshots |
+
+### Atom types
+
+| Type | Description |
+|---|---|
+| 1–92 | Capsid |
+| 93 | RNA |
+| 94 | dNTP |
+| 95 | RNA (after binding) |
+| 96 | dNTP (after binding) |
+| 97 | RNA (to bind) |
+| 98 | dNTP (cDNA) (to bind) |
+| 99 | dNTP (cDNA) (after binding) |
+| 100 | dNTP (new) (after binding) |
+
+### Bond types (RNA/DNA)
+
+| Type | Description |
+|---|---|
+| 520 | RNA backbone |
+| 521 | RNA–dNTP |
+| 522 | dNTP–dNTP backbone (cDNA strand) |
+| 523 | RNA backbone (stiffened after dNTP addition) |
+| 524 | RNA–dNTP (marked for cleavage) |
+| 525 | cDNA–dNTP |
+| 526 | dNTP–dNTP backbone (new strand) |
+| 527 | cDNA backbone (stiffened after dNTP addition) |
+
+## Installation
+
+Brief instructions only; see the LAMMPS documentation for full details.
+
+- **LAMMPS** with the custom pair style: copy the custom pair style into the LAMMPS source directory, enable the required packages and build. For example, for LAMMPS 21Jul20 (the version used for the main runs):
+  ```bash
+  cp LAMMPS_custom_fixes/pair_gauss_wall.* /path/to/lammps/src/
+  cd /path/to/lammps/src
+  make yes-molecule yes-mc yes-user-fep
+  make mpi
+  ```
+  The MOLECULE package provides bonds and angles, MC provides `fix bond/create` and `fix bond/break`, and USER-FEP (FEP in newer LAMMPS versions) provides `pair_style lj/cut/soft`. See the [LAMMPS build instructions](https://docs.lammps.org/Build.html) and the [package list](https://docs.lammps.org/Packages_list.html).
+- **Python dependencies** (for `CN.py`):
+  ```bash
+  pip install numpy MDAnalysis
+  ```
+
+Set the `lmp` variable in each driver script to the path of your LAMMPS executable. The driver scripts are written for SLURM.
+
+## Usage
+
+### 1. Stage I
+
+```bash
+cd RT_uncoating/RT_input_files/Main_runs/stage_I
+sbatch kmc.sh
+```
+
+This starts from `cap_rnp_dntp_ang.data` and writes the evolving structure to `start.data` and the trajectory to `traj.lammpstrj`.
+
+Then generate the list of cDNA bead IDs from the final Stage I data file:
+
+```bash
+cd extract_frames
+bash cdna_ids.sh            # reads start.data, writes cdna_ids.dat
+```
+
+### 2. Stage II
+
+```bash
+cd RT_uncoating/RT_input_files/Main_runs/stage_II
+sbatch kmc_stage_II.sh      # starts from start.data
+```
+
+### 3. Stage III
+
+```bash
+cd RT_uncoating/RT_input_files/Main_runs/stage_III/eps_3.5     # or eps_2.0, eps_5.0
+sbatch kmc_stage_III.sh     # starts from start_cdna.data; uses cdna_ids.dat
+python CN.py                # coordination numbers from traj.lammpstrj
+```
+
+### 4. PPT included
+
+```bash
+cd RT_uncoating/RT_input_files/PPT_included
+sbatch kmc_dna_flap.sh
+```
+
+### 5. Virtual object expansion
+
+```bash
+cd RT_uncoating/RT_input_files/virtual_object_expansion/cone      # or double_sphere
+sbatch run.sh
+```
+
+Seeds are passed to LAMMPS with `-var SEED <seed>`. Different input seeds lead to different rupture patterns.
+
+## Data
+
+- `cryo_rupture_predictions/`: representative snapshots from the CG-KMC simulations that match the cryo-ET images in the paper.
+- `selected_configurations/cap_dna_configs.zip`: selected configurations of capsid rupture (with DNA) for ε = 2.0, 3.5 and 5.0.
+
+## Citation
+
+If you use these files, please cite:
+
+[*Proc. Natl. Acad. Sci. U.S.A.* 123 (43) e2617714123 (2026)](https://doi.org/10.1073/pnas.2617714123)
+
+## Additional resources
+
+Datasets and models are available on [Zenodo](https://doi.org/10.5281/zenodo.22169970).
