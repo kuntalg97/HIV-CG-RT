@@ -139,7 +139,7 @@ Brief instructions only; see the LAMMPS documentation for full details.
   pip install numpy MDAnalysis
   ```
 
-Set the `lmp` variable in each driver script to the path of your LAMMPS executable. The driver scripts are written for SLURM.
+Paths and cluster settings in the scripts are placeholders (`/path/to/...`, `<partition>`, `<mpi-module>`) and should be set before running. In particular, set the `lmp` variable in each driver script to the path of your LAMMPS executable. The driver scripts are written for SLURM.
 
 ## Usage
 

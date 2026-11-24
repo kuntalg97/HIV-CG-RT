@@ -2,18 +2,19 @@
 
 #SBATCH -N 1
 #SBATCH -t 48:00:00
-#SBATCH -p RM
+#SBATCH -p <partition>
 #SBATCH --ntasks-per-node=128
 #SBATCH --job-name=s3SI
 
-module unload intel-oneapi
-module load intel-mpi
+# Load the MPI module(s) for your cluster, e.g.:
+# module load <mpi-module>
 
 nodes=1
 ntasks=128
 cores=$((nodes * ntasks))
 
-lmp=/ocean/projects/mca94p017p/kuntalg/softwares/LAMMPS/lammps-21Jul20/src/lmp_mpi
+# Path to the LAMMPS executable, built with the custom gauss/wall pair style (21Jul20 used here)
+lmp=/path/to/lammps/src/lmp_mpi
 
 rm *lammpstrj* *restart* start.data log.lammps
 
